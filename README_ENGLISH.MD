@@ -1,5 +1,7 @@
 # Emergency Gate Monitoring Project
-
+![Aplicativo Monitoramento](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_front.jpg?raw=true)
+![Aplicativo Monitoramento Abertura](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_openings.jpg?raw=true)
+![Aplicativo Monitoramento Sem sinal](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_no-signal.jpg?raw=true)
 ## Description
 
 This project aims to monitor emergency gates, recording when they are opened and maintaining a log of these openings. The information is stored in a PostgreSQL database and updated in real-time on the front end with Socket.IO. When a gate is opened, the front end emits an audible and visual alert and sends a notification email.
