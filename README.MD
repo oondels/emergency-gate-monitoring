@@ -1,5 +1,5 @@
 # Projeto de Monitoramento de Portões de Emergência
-![Aplicativo Monitoramento](https://github.com/oondels/emergency-gate-monitoring/edit/main/images/emergency_gate_front.jpg)
+![Aplicativo Monitoramento](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_front.jpg?raw=true)
 ![Aplicativo Monitoramento Abertura](https://github.com/oondels/emergency-gate-monitoring/edit/main/images/emergency_gate_openings.jpg)
 ![Aplicativo Monitoramento Sem sinal](https://github.com/oondels/emergency-gate-monitoring/edit/main/images/emergency_gate_no-signal.jpg)
 ## Descrição
