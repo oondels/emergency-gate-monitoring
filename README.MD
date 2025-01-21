@@ -1,5 +1,7 @@
 # Projeto de Monitoramento de Portões de Emergência
-
+![Aplicativo Monitoramento](https://github.com/oondels/emergency-gate-monitoring/edit/main/images/emergency_gate_front.jpg)
+![Aplicativo Monitoramento Abertura](https://github.com/oondels/emergency-gate-monitoring/edit/main/images/emergency_gate_openings.jpg)
+![Aplicativo Monitoramento Sem sinal](https://github.com/oondels/emergency-gate-monitoring/edit/main/images/emergency_gate_no-signal.jpg)
 ## Descrição
 
 Este projeto tem como objetivo monitorar as portas de emergência, registrando quando estão abertas e mantendo um registro dessas aberturas. Essas informações são armazenadas em um banco de dados PostgreSQL e atualizadas em tempo real no front end com Socket.IO. Quando uma porta é aberta, o front end emite um alerta sonoro e visual e envia um e-mail de notificação.
