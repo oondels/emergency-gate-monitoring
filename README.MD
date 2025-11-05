@@ -2,15 +2,14 @@
 
 ![Aplicativo Monitoramento](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_front.jpg?raw=true)
 ![Aplicativo Monitoramento Abertura](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_openings.jpg?raw=true)
-![Aplicativo Monitoramento Sem sinal](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_no-signal.jpg?raw=true)
 
-## 📋 Descrição
+## Descrição
 
 Sistema completo de monitoramento em tempo real para portões de emergência, composto por dispositivos IoT (ESP32), servidor backend Node.js e aplicação web Vue.js. O sistema registra aberturas, mantém histórico no banco de dados PostgreSQL, notifica usuários via e-mail e exibe atualizações em tempo real através de WebSockets.
 
 O projeto garante segurança e compliance ao fornecer monitoramento contínuo, alertas automáticos e relatórios detalhados sobre o uso dos portões de emergência.
 
-## ✨ Funcionalidades Principais
+## Funcionalidades Principais
 
 - **Monitoramento em Tempo Real**: Comunicação bidirecional via Socket.IO entre dispositivos e aplicação web
 - **Sistema de Heartbeat**: Detecção automática de dispositivos offline/online
@@ -24,7 +23,7 @@ O projeto garante segurança e compliance ao fornecer monitoramento contínuo, a
 - **Multi-Portão**: Suporte para múltiplos portões simultaneamente
 - **Status Visual**: Indicadores de estado (aberto/fechado/desconectado)
 
-## 🏗️ Arquitetura do Sistema
+## Arquitetura do Sistema
 
 ```
 ┌─────────────────┐         ┌──────────────────┐         ┌─────────────────┐
@@ -41,7 +40,7 @@ O projeto garante segurança e compliance ao fornecer monitoramento contínuo, a
                          Socket.IO + HTTP
 ```
 
-## 🔧 Componentes do Sistema
+## Componentes do Sistema
 
 ### Hardware (Dispositivo ESP32)
 
@@ -69,7 +68,7 @@ O projeto garante segurança e compliance ao fornecer monitoramento contínuo, a
 - **Estilo**: CSS3 com animações
 - **Recursos**: Alertas sonoros, indicadores visuais
 
-## 📦 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 emergency-gate-monitoring/
@@ -87,9 +86,9 @@ Arquivos Relacionados (Repositórios Externos):
 └── mailer.js                # Configuração de e-mail
 ```
 
-## 🚀 Instalação e Configuração
+## Instalação e Configuração
 
-### 1️⃣ Banco de Dados PostgreSQL
+### Banco de Dados PostgreSQL
 
 ```sql
 -- Criar schema
@@ -189,7 +188,7 @@ const char *name = "Portão Emergência 1";  // Nome descritivo
 - `WebSockets` (^2.3.0)
 - `ArduinoHttpClient` (^0.6.1)
 
-### 4️⃣ Frontend (Vue.js)
+### Frontend (Vue.js)
 
 ```bash
 # Em um projeto Vue.js existente, instalar dependências
@@ -241,7 +240,7 @@ echo "export default 'IP_SERVIDOR'" > src/ip.js
     └─────────────┘
 ```
 
-## 📡 Protocolo de Comunicação
+## Protocolo de Comunicação
 
 ### Eventos Socket.IO (Dispositivo → Servidor)
 
@@ -284,7 +283,7 @@ Content-Type: application/json
 }
 ```
 
-## 🔍 Funcionalidades Detalhadas
+## Funcionalidades Detalhadas
 
 ### Sistema de Heartbeat
 
@@ -320,7 +319,7 @@ Quando sem conexão WiFi ou servidor inacessível:
 2. ✅ Servidor registra fechamento
 3. ✅ Aplicação atualiza status visual
 
-## 🎨 Interface do Usuário
+## Interface do Usuário
 
 ### Tela Inicial
 - Botão para iniciar monitoramento
@@ -345,7 +344,7 @@ Quando sem conexão WiFi ou servidor inacessível:
 .door-card.disconnected → Cinza + borda tracejada
 ```
 
-## 🛡️ Segurança e Confiabilidade
+## Segurança e Confiabilidade
 
 - ✅ Reconexão automática de WebSocket
 - ✅ Detecção de dispositivos offline
@@ -356,7 +355,7 @@ Quando sem conexão WiFi ou servidor inacessível:
 - ✅ Tratamento de erros HTTP/Socket
 - ✅ Pooling de conexões PostgreSQL
 
-## 📊 Monitoramento e Logs
+## Monitoramento e Logs
 
 ### Logs do Servidor
 ```
@@ -375,7 +374,7 @@ Quando sem conexão WiFi ou servidor inacessível:
 [WS] Heartbeat enviado
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Dispositivo não conecta
 
@@ -408,7 +407,7 @@ SELECT * FROM portoes.portoes_emerg_registrados;
 SELECT * FROM portoes.portoes_emergencia ORDER BY date DESC LIMIT 10;
 ```
 
-## 🔄 Fluxo de Funcionamento
+## Fluxo de Funcionamento
 
 ```mermaid
 sequenceDiagram
@@ -437,7 +436,7 @@ sequenceDiagram
     S->>W: Atualização status
 ```
 
-## 📈 Melhorias Futuras
+## Melhorias Futuras
 
 - [ ] Dashboard de estatísticas e gráficos
 - [ ] Exportação de relatórios (PDF/Excel)
@@ -449,7 +448,7 @@ sequenceDiagram
 - [ ] Backup automático de dados
 
 
-## 👥 Contribuidores
+## Contribuidores
 
 Desenvolvido para sistema de monitoramento de segurança empresarial.
 
