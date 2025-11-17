@@ -236,7 +236,7 @@ echo "export default 'IP_SERVIDOR'" > src/ip.js
     │  GND    ────┼──────────┤ GND          │
     │             │          └──────────────┘
     │  GPIO16 ────┼──── Sensor de Porta
-    │  GPIO17 ────┼──── Sirene
+    │  GPIO17 ────┼──── Relé ───────── Sirene
     └─────────────┘
 ```
 
