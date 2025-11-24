@@ -9,8 +9,8 @@
 // —————— Configurações de Rede e Servidor ——————
 const char *ssid = "DASS-CORP";
 const char *password = "dass7425corp";
-#define URL_LINK "http://10.110.21.3:3028/portao_emerg"
-const char *websockets_server = "10.110.21.3";
+#define URL_LINK "http://10.100.1.43:3028/portao_emerg"
+const char *websockets_server = "10.100.1.43";
 const uint16_t websockets_server_port = 3028;
 
 // —————— Pins ——————
@@ -24,8 +24,8 @@ const int ARRAY_SIZE = 20;
 String offline_openings[ARRAY_SIZE];
 int current_array_index = 0;
 
-const char *door_id = "4";
-const char *name = "Portão Emergência 4";
+const char *door_id = "2";
+const char *name = "Portão Emergência Doca";
 bool offlineMode = false;
 bool doorState = false;
 
@@ -38,6 +38,11 @@ const unsigned long debounceDelay = 50;
 // —————— Heartbeat ——————
 unsigned long previousMillis = 0;
 const unsigned long heartbeatInterval = 5000;
+
+// —————— Sirene ——————
+const unsigned long sirenDuration = 10000; // Duração da sirene em ms
+bool sirenActive = false;
+unsigned long sirenStartTime = 0;
 
 // —————— Objetos ——————
 RTC_DS3231 rtc;
@@ -256,7 +261,6 @@ void socketIOEvent(socketIOmessageType_t type,
   }
 }
 
-
 void checkRelayState(int reading, unsigned long now)
 {
   // Debounce e lógica de abertura/fechamento…
@@ -269,7 +273,14 @@ void checkRelayState(int reading, unsigned long now)
       buttonState = reading;
       if (buttonState == HIGH && !doorState)
       {
+        // Marca porta como aberta
         doorState = true;
+
+        // Liga sirene ao abrir a porta
+        digitalWrite(SIRENE_PIN, LOW);
+        sirenActive = true;
+        sirenStartTime = now;
+
         if (offlineMode)
         {
           DateTime t = rtc.now();
@@ -282,13 +293,19 @@ void checkRelayState(int reading, unsigned long now)
         {
           Serial.println("[Porta] Aberta, enviando");
           sendData(true);
-          digitalWrite(SIRENE_PIN, HIGH);
         }
       }
       // Logica de atualizacao de porta fechada
       else if (buttonState == LOW && doorState)
       {
-        digitalWrite(SIRENE_PIN, LOW);
+        // Desliga sirene se prota estiver fechada
+        if (sirenActive)
+        {
+          digitalWrite(SIRENE_PIN, HIGH);
+          sirenActive = false;
+          Serial.println("[Sirene] Desligada - porta aberta");
+        }
+
         doorState = false;
         if (!offlineMode)
         {
@@ -322,12 +339,22 @@ void serverHeartBeat(unsigned long now)
   }
 }
 
+void checkSirenDuration(unsigned long now)
+{
+  if (sirenActive && (now - sirenStartTime >= sirenDuration))
+  {
+    digitalWrite(SIRENE_PIN, HIGH);
+    sirenActive = false;
+    Serial.println("[Sirene] Desligada após timeout");
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(SIRENE_PIN, OUTPUT);
-  digitalWrite(SIRENE_PIN, LOW);
+  digitalWrite(SIRENE_PIN, HIGH);
   Serial.println("\n[Sistema] Iniciando...");
 
   // I2C para o RTC
@@ -386,4 +413,5 @@ void loop()
 
   checkRelayState(reading, now);
   serverHeartBeat(now);
+  checkSirenDuration(now);
 }
