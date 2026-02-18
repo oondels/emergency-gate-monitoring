@@ -4,456 +4,247 @@
 ![Aplicativo Monitoramento Abertura](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_openings.jpg?raw=true)
 ![Aplicativo Monitoramento Sem sinal](https://github.com/oondels/emergency-gate-monitoring/blob/main/images/emergency_gate_no-signal.jpg?raw=true)
 
-## 📋 Descrição
+## 📋 Visão Geral
 
-Sistema completo de monitoramento em tempo real para portões de emergência, composto por dispositivos IoT (ESP32), servidor backend Node.js e aplicação web Vue.js. O sistema registra aberturas, mantém histórico no banco de dados PostgreSQL, notifica usuários via e-mail e exibe atualizações em tempo real através de WebSockets.
+Este projeto implementa um sistema de monitoramento em tempo real para portões de emergência, com foco em robustez operacional e rastreabilidade:
 
-O projeto garante segurança e compliance ao fornecer monitoramento contínuo, alertas automáticos e relatórios detalhados sobre o uso dos portões de emergência.
+- Firmware ESP32 (PlatformIO) para leitura do sensor, acionamento da sirene e integração com backend.
+- Servidor Node.js com Socket.IO + endpoint HTTP para sincronização de eventos.
+- Aplicação web (Vue.js) para monitoramento, alertas e histórico.
 
-## ✨ Funcionalidades Principais
+O objetivo é garantir operação contínua mesmo com instabilidade de rede, mantendo segurança local (sirene), sincronização de eventos e visibilidade centralizada.
 
-- **Monitoramento em Tempo Real**: Comunicação bidirecional via Socket.IO entre dispositivos e aplicação web
-- **Sistema de Heartbeat**: Detecção automática de dispositivos offline/online
-- **Modo Offline**: Armazenamento local de eventos quando sem conexão, com sincronização automática
-- **Alertas Inteligentes**: 
-  - Alarme sonoro na aplicação web
-  - Sirene física no dispositivo
-  - Notificações por e-mail
-- **Histórico Completo**: Registro de todas as aberturas com timestamp
-- **Interface Responsiva**: Dashboard adaptável para desktop e mobile
-- **Multi-Portão**: Suporte para múltiplos portões simultaneamente
-- **Status Visual**: Indicadores de estado (aberto/fechado/desconectado)
+## ✨ Funcionalidades
 
-## 🏗️ Arquitetura do Sistema
+- Monitoramento em tempo real via Socket.IO.
+- Handshake explícito de conexão com validação de porta.
+- Heartbeat com ACK e watchdog de saúde da sessão.
+- Reconexão automática de Wi-Fi e Socket.IO com backoff exponencial.
+- Fila HTTP em memória (ring buffer), sem bloquear o loop principal.
+- Modo offline com armazenamento de aberturas via RTC DS3231.
+- Sincronização automática de eventos pendentes quando a conectividade retorna.
+- Debounce de leitura de porta e controle de sirene preservados.
 
-```
+## 🏗️ Arquitetura
+
+```text
 ┌─────────────────┐         ┌──────────────────┐         ┌─────────────────┐
 │  Dispositivo    │◄───────►│   Servidor       │◄───────►│   Front-end     │
 │  ESP32          │         │   Node.js        │         │   Vue.js        │
 │                 │         │                  │         │                 │
-│ • Sensor        │         │ • Socket.IO      │         │ • Dashboard     │
-│ • RTC DS3231    │         │ • Express        │         │ • Vuetify       │
-│ • WiFi          │         │ • PostgreSQL     │         │ • Socket.IO     │
-│ • Sirene        │         │ • NodeMailer     │         │ • Alertas       │
+│ • Sensor porta  │         │ • Socket.IO      │         │ • Dashboard     │
+│ • RTC DS3231    │         │ • Express        │         │ • Alertas       │
+│ • Sirene        │         │ • PostgreSQL     │         │ • Histórico     │
+│ • Wi-Fi         │         │ • API /portao... │         │ • Status online │
 └─────────────────┘         └──────────────────┘         └─────────────────┘
-        │                            │                            │
-        └────────────────────────────┴────────────────────────────┘
-                         Socket.IO + HTTP
+       Socket.IO (estado/heartbeat) + HTTP (persistência de eventos)
 ```
 
-## 🔧 Componentes do Sistema
+## 🧠 Firmware ESP32 (estado atual)
 
-### Hardware (Dispositivo ESP32)
+Arquivo principal: `src/main.cpp`
 
-- **Microcontrolador**: ESP32 DevKit
-- **RTC**: Módulo DS3231 (clock em tempo real)
-- **Sensor**: Relé/Switch de porta (GPIO16)
-- **Sirene**: Buzzer/Sirene (GPIO17)
-- **Comunicação**: WiFi 2.4GHz
-- **Protocolo**: Socket.IO (Engine.IO v4) + HTTP
+### Conectividade Socket.IO
 
-### Software Backend (Servidor Node.js)
+- Conexão WebSocket explícita:
+  - `socketIO.begin(websockets_server, websockets_server_port, "/socket.io/?EIO=4&transport=websocket")`
+- `socketIO.loop()` executa continuamente no `loop()`.
+- Em `sIOtype_CONNECT`, mantém `socketIO.send(sIOtype_CONNECT, "/")`.
 
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **WebSocket**: Socket.IO
-- **Banco de Dados**: PostgreSQL
-- **E-mail**: NodeMailer (SMTP Gmail)
-- **Porta**: 3028
+### Handshake obrigatório
 
-### Software Frontend (Aplicação Vue.js)
+Fluxo suportado:
 
-- **Framework**: Vue.js 3 (Composition API)
-- **UI Library**: Vuetify 3
-- **Cliente WebSocket**: Socket.IO Client
-- **Estilo**: CSS3 com animações
-- **Recursos**: Alertas sonoros, indicadores visuais
+1. Servidor envia `start_conclude_connection`.
+2. ESP32 responde imediatamente com:
+   - `conclude_connection` + `{door, name, status}`.
+3. `wsReady` só é considerado ativo quando:
+   - chega `conclude_ack`, ou
+   - após envio do `conclude_connection` + primeiro `heartbeat_ack` válido.
 
-## 📦 Estrutura do Projeto
+### Heartbeat robusto
 
+Enviado a cada 5 segundos no formato novo:
+
+```json
+["heartbeat", { "door": "5", "ts": 123456, "rssi": -58 }]
 ```
+
+Comportamento:
+
+- `heartbeat_ack` atualiza `lastHeartbeatAckMs`.
+- Se ficar mais de 20s sem ACK, o socket é reconectado de forma forçada.
+
+### Reconexão com backoff
+
+- Wi-Fi: 1s, 2s, 4s... até 30s.
+- Socket.IO: 1s, 2s, 4s... até 30s.
+- Ambos com logs de motivo e tentativa.
+
+### Fila HTTP não bloqueante
+
+- Eventos de abertura/fechamento não fazem `HTTPClient.POST` no fluxo da borda do botão.
+- Eventos vão para ring buffer em memória.
+- Uma task de flush (`httpFlushTask`) envia no máximo 1 requisição por ciclo (1s).
+- Timeouts curtos:
+  - connect timeout: 2000 ms
+  - read timeout: 3000 ms
+- Se falhar, o evento permanece na fila para retry.
+
+### Modo offline com RTC
+
+- Aberturas sem conectividade são armazenadas em buffer local com timestamp do DS3231.
+- Ao recuperar rede, o firmware enfileira sincronização para `/portao_emerg` com `offline_mode=true`.
+
+### Segurança local da sirene
+
+- A sirene continua sendo acionada imediatamente ao abrir a porta.
+- Desligamento por fechamento ou timeout máximo configurado.
+
+## 📦 Estrutura do Repositório
+
+```text
 emergency-gate-monitoring/
 ├── src/
 │   └── main.cpp              # Firmware ESP32 (PlatformIO)
 ├── test/
 │   └── doorRepository.js     # Repositório de dados (PostgreSQL)
-├── platformio.ini            # Configurações PlatformIO
-├── images/                   # Screenshots da aplicação
+├── images/                   # Capturas da aplicação
+├── platformio.ini            # Configuração de build/deps
 └── README.MD
-
-Arquivos Relacionados (Repositórios Externos):
-├── portao_emerg.js          # Servidor Socket.IO/Express
-├── PortaoEmergencia.vue     # Componente Vue.js Frontend
-└── mailer.js                # Configuração de e-mail
 ```
 
-## 🚀 Instalação e Configuração
+## 🔧 Configuração do Firmware
 
-### 1️⃣ Banco de Dados PostgreSQL
-
-```sql
--- Criar schema
-CREATE SCHEMA IF NOT EXISTS portoes;
-
--- Tabela de portões registrados
-CREATE TABLE portoes.portoes_emerg_registrados (
-    door_id VARCHAR(10) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL
-);
-
--- Tabela de eventos/histórico
-CREATE TABLE portoes.portoes_emergencia (
-    id SERIAL PRIMARY KEY,
-    portao VARCHAR(10) REFERENCES portoes.portoes_emerg_registrados(door_id),
-    status BOOLEAN NOT NULL,
-    date TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
--- Índices para performance
-CREATE INDEX idx_portoes_date ON portoes.portoes_emergencia(date DESC);
-CREATE INDEX idx_portoes_status ON portoes.portoes_emergencia(portao, status);
-```
-
-### 2️⃣ Servidor Backend (Node.js)
-
-```bash
-# Instalar dependências
-npm install express socket.io cors pg nodemailer
-
-# Criar arquivo .env
-cat > .env << EOF
-# Banco de Dados PostgreSQL
-IP=localhost
-PORT=5432
-USERS=postgres
-PASS=sua_senha
-DBASE=nome_database
-
-# Configuração de E-mail
-EMAIL=seu_email@gmail.com
-EMAIL_PASS=senha_app_gmail
-EOF
-
-# Iniciar servidor
-node portao_emerg.js
-```
-
-**Dependências principais:**
-- `express`: ^4.18.0
-- `socket.io`: ^4.6.0
-- `pg`: ^8.11.0
-- `nodemailer`: ^6.9.0
-- `cors`: ^2.8.5
-
-### 3️⃣ Dispositivo ESP32 (Firmware)
-
-**Usando PlatformIO:**
-
-```bash
-# Instalar PlatformIO CLI
-pip install platformio
-
-# Navegar até o diretório do projeto
-cd emergency-gate-monitoring
-
-# Compilar
-pio run
-
-# Fazer upload para ESP32
-pio run --target upload
-
-# Monitorar Serial
-pio device monitor -b 115200
-```
-
-**Configurações no `src/main.cpp`:**
+Ajuste em `src/main.cpp`:
 
 ```cpp
-// WiFi
 const char *ssid = "SUA_REDE_WIFI";
 const char *password = "SUA_SENHA_WIFI";
 
-// Servidor
 #define URL_LINK "http://IP_SERVIDOR:3028/portao_emerg"
 const char *websockets_server = "IP_SERVIDOR";
 const uint16_t websockets_server_port = 3028;
 
-// Identificação do Portão
-const char *door_id = "1";  // ID único do portão
-const char *name = "Portão Emergência 1";  // Nome descritivo
+const char *door_id = "1";
+const char *name = "Portão Emergência 1";
 ```
 
-**Bibliotecas necessárias** (gerenciadas pelo PlatformIO):
-- `ArduinoJson` (^7.4.2)
-- `RTClib` (^2.1.4)
-- `WebSockets` (^2.3.0)
-- `ArduinoHttpClient` (^0.6.1)
-
-### 4️⃣ Frontend (Vue.js)
+## 🚀 Build e Upload (PlatformIO)
 
 ```bash
-# Em um projeto Vue.js existente, instalar dependências
-npm install socket.io-client
-
-# Configurar IP do servidor em @/ip.js
-echo "export default 'IP_SERVIDOR'" > src/ip.js
-
-# Copiar componente PortaoEmergencia.vue para src/views/
-# Adicionar rota no router
+pio run
+pio run --target upload
+pio device monitor -b 115200
 ```
 
-**Configuração de rota (router/index.js):**
+## 🔌 Pinagem ESP32
 
-```javascript
-{
-  path: '/portoes-emergencia',
-  name: 'PortaoEmergencia',
-  component: () => import('@/views/PortaoEmergencia.vue')
-}
-```
-
-## 🔌 Conexões do Hardware
-
-### Pinagem ESP32
-
-| Componente | Pino ESP32 | GPIO | Função |
-|------------|-----------|------|--------|
-| Sensor/Relé | 16 | GPIO16 | INPUT_PULLUP |
-| Sirene | 17 | GPIO17 | OUTPUT |
-| RTC SDA | 21 | GPIO21 | I2C Data |
-| RTC SCL | 22 | GPIO22 | I2C Clock |
-| RTC VCC | 3.3V | - | Alimentação |
-| RTC GND | GND | - | Terra |
-
-### Diagrama de Conexão
-
-```
-         ESP32                    RTC DS3231
-    ┌─────────────┐          ┌──────────────┐
-    │             │          │              │
-    │  GPIO21 ────┼──────────┤ SDA          │
-    │  GPIO22 ────┼──────────┤ SCL          │
-    │  3.3V   ────┼──────────┤ VCC          │
-    │  GND    ────┼──────────┤ GND          │
-    │             │          └──────────────┘
-    │  GPIO16 ────┼──── Sensor de Porta
-    │  GPIO17 ────┼──── Sirene
-    └─────────────┘
-```
+| Componente | GPIO | Função |
+|---|---|---|
+| Sensor/relé da porta | GPIO16 | `INPUT_PULLUP` |
+| Sirene | GPIO17 | `OUTPUT` |
+| RTC SDA | GPIO21 | I2C Data |
+| RTC SCL | GPIO22 | I2C Clock |
 
 ## 📡 Protocolo de Comunicação
 
-### Eventos Socket.IO (Dispositivo → Servidor)
+### Dispositivo → Servidor (Socket.IO)
 
-| Evento | Direção | Payload | Descrição |
-|--------|---------|---------|-----------|
-| `conclude_connection` | ESP32→Server | `{door, name, status}` | Handshake inicial |
-| `heartbeat` | ESP32→Server | `{door_id: timestamp}` | Keep-alive (5s) |
-| `door_status` | ESP32→Server | `{door, status}` | Resposta de status |
+| Evento | Payload | Descrição |
+|---|---|---|
+| `conclude_connection` | `{door, name, status}` | Conclusão do handshake |
+| `heartbeat` | `{door, ts, rssi}` | Keep-alive do dispositivo |
+| `door_status` | `{door, status}` | Estado atual da porta |
 
-### Eventos Socket.IO (Servidor → Dispositivo)
+### Servidor → Dispositivo (Socket.IO)
 
-| Evento | Direção | Payload | Descrição |
-|--------|---------|---------|-----------|
-| `start_conclude_connection` | Server→ESP32 | - | Inicia handshake |
-| `get_door_status` | Server→ESP32 | `{door}` | Requisita status |
-| `conclude_ack` | Server→ESP32 | `{door}` | Confirma conexão |
-
-### Eventos Socket.IO (Aplicação Web)
-
-| Evento | Direção | Payload | Descrição |
-|--------|---------|---------|-----------|
-| `get_all_doors` | Client→Server | - | Lista todos portões |
-| `get_connected_doors` | Client→Server | - | Lista portões online |
-| `last_openings` | Client→Server | `{door, limit}` | Histórico |
-| `portao_emerg` | Server→Client | `{door, status, date}` | Atualização em tempo real |
-| `door_connected` | Server→Client | `{door, name, status}` | Novo portão online |
-| `door_disconnect` | Server→Client | `{door, alive, timestamp}` | Portão offline |
+| Evento | Payload | Descrição |
+|---|---|---|
+| `start_conclude_connection` | `-` | Inicia handshake obrigatório |
+| `conclude_ack` | `{door}` | Confirmação de handshake |
+| `heartbeat_ack` | `{door,...}` | ACK do heartbeat |
+| `get_door_status` | `{door}` | Requisição de estado atual |
 
 ### Endpoint HTTP
 
-```
-POST /portao_emerg
-Content-Type: application/json
+`POST /portao_emerg`
 
+Payload online:
+
+```json
 {
   "open": true,
   "door": "1",
-  "offline_mode": false,
-  "offline_openings": ["dd/MM/yyyy HH:mm:ss", ...]
+  "offline_mode": false
 }
 ```
 
-## 🔍 Funcionalidades Detalhadas
+Payload de sincronização offline:
 
-### Sistema de Heartbeat
-
-**Dispositivo ESP32:**
-- Envia heartbeat a cada 5 segundos
-- TTL: 10 segundos (2x intervalo)
-- Marca automaticamente como offline se não responder
-
-**Aplicação Web:**
-- Envia heartbeat a cada 15 segundos
-- Verifica conexão do servidor
-- Exibe aviso se desconectado
-
-### Modo Offline (ESP32)
-
-Quando sem conexão WiFi ou servidor inacessível:
-1. Eventos são armazenados em buffer local (20 posições)
-2. Timestamp obtido do RTC DS3231
-3. Ao reconectar, sincroniza automaticamente via HTTP POST
-4. Buffer é limpo após envio bem-sucedido
-
-### Alertas e Notificações
-
-**Quando portão abre:**
-1. ✅ ESP32 aciona sirene física
-2. ✅ Servidor registra no banco de dados
-3. ✅ Servidor envia evento Socket.IO
-4. ✅ Aplicação web toca alarme sonoro
-5. ✅ Servidor envia e-mail (opcional/comentado)
-
-**Quando portão fecha:**
-1. ✅ ESP32 desliga sirene
-2. ✅ Servidor registra fechamento
-3. ✅ Aplicação atualiza status visual
-
-## 🎨 Interface do Usuário
-
-### Tela Inicial
-- Botão para iniciar monitoramento
-- Conecta ao servidor Socket.IO
-
-### Dashboard de Monitoramento
-- **Cards de Portão**: Um para cada portão registrado
-  - Cor verde: Fechado
-  - Cor vermelha (pulsante): Aberto
-  - Cor cinza: Desconectado
-- **Informações por card**:
-  - Nome do portão
-  - Status atual
-  - Última atualização
-  - Últimas 5 aberturas (expandível)
-  - Ícone de conexão
-
-### Estados Visuais
-```css
-.door-card.open      → Vermelho + animação pulse
-.door-card.close     → Verde
-.door-card.disconnected → Cinza + borda tracejada
+```json
+{
+  "door": "1",
+  "offline_mode": true,
+  "offline_openings": ["18/02/2026 10:45:02", "18/02/2026 11:02:18"]
+}
 ```
 
-## 🛡️ Segurança e Confiabilidade
+## 📊 Logs Técnicos
 
-- ✅ Reconexão automática de WebSocket
-- ✅ Detecção de dispositivos offline
-- ✅ Buffer de eventos offline
-- ✅ Validação de IDs de portão
-- ✅ Debounce de sensor (50ms)
-- ✅ Timestamp sincronizado (RTC)
-- ✅ Tratamento de erros HTTP/Socket
-- ✅ Pooling de conexões PostgreSQL
+Prefixos padronizados no firmware:
 
-## 📊 Monitoramento e Logs
+- `[WIFI]` estado de rede e reconexão.
+- `[WS]` conexão, handshake e eventos Socket.IO.
+- `[HB]` envio/ack de heartbeat.
+- `[HTTP]` envio/retry de persistência.
+- `[QUEUE]` operações da fila local.
 
-### Logs do Servidor
-```
-[Sistema] Porta conectada: Portão 1
-[WS] Heartbeat check - doors connected: 3
-[HTTP] Dados recebidos do portão: {door: "1", status: true}
-[WS] Porta desconectada: Portão 2
-```
+Exemplos:
 
-### Logs do Dispositivo
-```
-[WiFi] Conectado com sucesso
+```text
+[WIFI] Got IP: 10.100.1.80
 [WS] Conectado
-[WS] conclude_connection enviado
-[Porta] Aberta, enviando
-[WS] Heartbeat enviado
+[WS] conclude_connection enviado status=open
+[HB] heartbeat enviado ts=123456 rssi=-57 wsReady=0
+[HB] heartbeat_ack recebido ts=123470
+[HTTP] OK (door_open) code=200
+[QUEUE] Enfileirado tipo=0 tamanho=3
 ```
 
-## 🐛 Troubleshooting
+## 🧪 Checklist de Validação Manual
 
-### Dispositivo não conecta
+1. Boot com Wi-Fi ok.
+2. Handshake concluído (`start_conclude_connection` → `conclude_connection` → `conclude_ack`/`heartbeat_ack`).
+3. Heartbeat + ACK estável por mais de 2 minutos.
+4. Simular perda de rede e verificar reconexão automática com backoff.
+5. Abrir/fechar porta durante falhas e validar fila HTTP sem travar o socket.
 
-```bash
-# Verificar WiFi
-# No Serial Monitor, verificar se conectou com sucesso
+## 🐛 Troubleshooting Rápido
 
-# Verificar servidor
-curl http://IP_SERVIDOR:3028/
+### ESP32 não conecta no servidor
 
-# Verificar firewall
-sudo ufw allow 3028
-```
+- Validar SSID/senha.
+- Validar IP e porta do backend.
+- Verificar no monitor serial logs `[WIFI]` e `[WS]`.
 
-### Aplicação não recebe atualizações
+### Eventos não persistem
 
-```javascript
-// Verificar IP do servidor em @/ip.js
-// Conferir porta 3028 acessível
-// Verificar console do navegador para erros Socket.IO
-```
+- Verificar endpoint `POST /portao_emerg`.
+- Observar logs `[HTTP]` e tamanho da `[QUEUE]`.
+- Confirmar conectividade entre ESP32 e backend.
 
-### Banco de dados não registra
+### Dispositivo aparece desconectado no dashboard
 
-```sql
--- Verificar conexão
-SELECT * FROM portoes.portoes_emerg_registrados;
+- Confirmar recebimento de `heartbeat_ack`.
+- Verificar timeout de ACK e reconexão do socket.
 
--- Verificar últimos eventos
-SELECT * FROM portoes.portoes_emergencia ORDER BY date DESC LIMIT 10;
-```
+## 👥 Contribuição
 
-## 🔄 Fluxo de Funcionamento
-
-```mermaid
-sequenceDiagram
-    participant E as ESP32
-    participant S as Servidor
-    participant D as Database
-    participant W as Web App
-    
-    E->>S: conclude_connection
-    S->>D: INSERT door (se novo)
-    S->>W: door_connected
-    
-    loop Heartbeat
-        E->>S: heartbeat (5s)
-        W->>S: heartbeat (15s)
-    end
-    
-    E->>S: Sensor detecta abertura
-    S->>D: INSERT event (status=true)
-    S->>W: portao_emerg event
-    W->>W: Toca alarme
-    S->>S: Envia e-mail (opcional)
-    
-    E->>S: Sensor detecta fechamento
-    S->>D: INSERT event (status=false)
-    S->>W: Atualização status
-```
-
-## 📈 Melhorias Futuras
-
-- [ ] Dashboard de estatísticas e gráficos
-- [ ] Exportação de relatórios (PDF/Excel)
-- [ ] Autenticação de usuários
-- [ ] Configuração de alertas personalizados
-- [ ] Suporte MQTT como alternativa
-- [ ] App mobile nativo
-- [ ] Integração com sistemas de segurança
-- [ ] Backup automático de dados
-
-
-## 👥 Contribuidores
-
-Desenvolvido para sistema de monitoramento de segurança empresarial.
+Sugestões e melhorias são bem-vindas via pull request.
 
 ---
 
-**Status do Projeto**: ✅ Em Produção  
-**Última Atualização**: Novembro 2025
+**Status**: Em produção
+
+**Última atualização**: 18/02/2026
